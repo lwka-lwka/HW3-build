@@ -1,0 +1,38 @@
+name: Build HW2 v2 exe
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安裝套件
+        run: python -m pip install numpy pillow pyinstaller
+
+      - name: 打包 exe
+        run: pyinstaller --noconfirm --onefile --windowed --name HW2_v2 "HW2（第二版）.py"
+
+      - name: 測試 exe 能否正常啟動
+        shell: pwsh
+        run: |
+          $proc = Start-Process -FilePath "dist\HW2_v2.exe" -PassThru
+          Start-Sleep -Seconds 15
+          if ($proc.HasExited) {
+            Write-Host "HW2_v2.exe 啟動後馬上結束，結束代碼：$($proc.ExitCode)"
+            exit 1
+          }
+          Write-Host "HW2_v2.exe 啟動成功"
+          Stop-Process -Id $proc.Id -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HW2_v2-exe
+          path: dist/HW2_v2.exe
