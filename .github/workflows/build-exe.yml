@@ -1,5 +1,8 @@
 name: Build HW2 v2 exe
 
+permissions:
+  contents: write
+
 on:
   push:
   workflow_dispatch:
@@ -36,3 +39,12 @@ jobs:
         with:
           name: HW2_v2-exe
           path: dist/HW2_v2.exe
+
+      - name: 發佈到 Release「exe」
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete exe --yes --cleanup-tag 2>$null
+          gh release create exe dist/HW2_v2.exe --title "HW2_v2 exe" --notes "由 GitHub Actions 自動打包（commit $($env:GITHUB_SHA.Substring(0,7))）" --target $env:GITHUB_SHA
