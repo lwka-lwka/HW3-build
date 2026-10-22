@@ -63,22 +63,6 @@ class XrayConverter(ImageConverter):
         return ImageOps.invert(img.convert("L"))
 
 
-# ---------- HW3 新增：胡椒鹽雜訊（用來測試中值濾波） ----------
-
-class SaltPepperNoiseConverter(ImageConverter):
-    def __init__(self, amount: float = 0.05, seed: int = 0):
-        self.__amount = amount  # 被雜訊污染的像素比例
-        self.__seed = seed
-
-    def convert(self, img: Image.Image) -> Image.Image:
-        arr = np.array(img.convert("L"), dtype=np.uint8)
-        rng = np.random.default_rng(self.__seed)
-        r = rng.random(arr.shape)
-        arr[r < self.__amount / 2] = 0          # 胡椒（黑點）
-        arr[r > 1 - self.__amount / 2] = 255    # 鹽（白點）
-        return Image.fromarray(arr, mode="L")
-
-
 # ---------- HW3 新增：中值濾波 ----------
 
 class MedianFilterConverter(ImageConverter):
@@ -97,8 +81,10 @@ class MedianFilterConverter(ImageConverter):
         self.__size = size
 
     def convert(self, img: Image.Image) -> Image.Image:
-        gray = np.array(img.convert("L"), dtype=np.float64)
-        return Image.fromarray(self.__filter(gray), mode="L")
+        # 彩色影像：R、G、B 三個通道分開各自做中值濾波，再合併回彩色
+        rgb = np.array(img.convert("RGB"), dtype=np.float64)
+        channels = [self.__filter(rgb[:, :, c]) for c in range(3)]
+        return Image.fromarray(np.stack(channels, axis=2), mode="RGB")
 
     def __filter(self, channel: np.ndarray) -> np.ndarray:
         h, w = channel.shape
@@ -240,12 +226,10 @@ class MainWindow:
         bar2.pack(fill="x", pady=(0, 10))
 
         tk.Label(bar2, text="濾波：").pack(side="left")
-        for text, mode in (("加入胡椒鹽雜訊", "noise"),
-                           ("中值濾波", "median")):
-            btn = tk.Button(bar2, text=text, state="disabled",
-                            command=lambda m=mode: self.onConvert(m))
-            btn.pack(side="left", padx=4)
-            self.__convertButtons.append(btn)
+        btn = tk.Button(bar2, text="中值濾波", state="disabled",
+                        command=lambda: self.onConvert("median"))
+        btn.pack(side="left", padx=4)
+        self.__convertButtons.append(btn)
 
         tk.Label(bar2, text="遮罩大小").pack(side="left", padx=(6, 0))
         self.__medianSize = tk.Spinbox(bar2, values=(3, 5, 7, 9), width=3,
@@ -261,7 +245,7 @@ class MainWindow:
             btn.pack(side="left", padx=4)
             self.__convertButtons.append(btn)
 
-        # 「以結果繼續處理」：例如先加雜訊，再對結果做中值濾波
+        # 「以結果繼續處理」：例如對中值濾波的結果再濾一次
         self.__chainButton = tk.Button(bar2, text="以結果作為原圖", state="disabled",
                                        command=self.onUseResult)
         self.__chainButton.pack(side="right", padx=4)
@@ -318,8 +302,6 @@ class MainWindow:
             self.__converter = PaletteConverter(colorCount=256)
         elif mode == "xray":
             self.__converter = XrayConverter()
-        elif mode == "noise":
-            self.__converter = SaltPepperNoiseConverter(amount=0.05)
         elif mode == "median":
             self.__converter = MedianFilterConverter(size=int(self.__medianSize.get()))
         elif mode in ("dct_dc", "dct_mid", "dct_high"):
@@ -337,7 +319,7 @@ class MainWindow:
         self.__status.config(text="轉換完成，需要的話請按「儲存成新檔」")
 
     def onUseResult(self) -> None:
-        """把目前的轉換結果當成新的原圖，方便連續處理（加雜訊 → 中值濾波）"""
+        """把目前的轉換結果當成新的原圖，方便連續處理"""
         if self.__convertedImage is None:
             return
         self.__originalImage = self.__convertedImage.convert("RGB")
