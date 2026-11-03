@@ -1,4 +1,4 @@
-name: Build HW2 v2 exe
+name: Build Laplacian exe
 
 permissions:
   contents: write
@@ -21,24 +21,24 @@ jobs:
         run: python -m pip install numpy pillow pyinstaller
 
       - name: 打包 exe
-        run: pyinstaller --noconfirm --onefile --windowed --name HW2_v2 "HW2（第二版）.py"
+        run: pyinstaller --noconfirm --onefile --windowed --name Laplacian_filter "影像類型轉換（第三版）.py"
 
       - name: 測試 exe 能否正常啟動
         shell: pwsh
         run: |
-          $proc = Start-Process -FilePath "dist\HW2_v2.exe" -PassThru
+          $proc = Start-Process -FilePath "dist\Laplacian_filter.exe" -PassThru
           Start-Sleep -Seconds 15
           if ($proc.HasExited) {
-            Write-Host "HW2_v2.exe 啟動後馬上結束，結束代碼：$($proc.ExitCode)"
+            Write-Host "Laplacian_filter.exe 啟動後馬上結束，結束代碼：$($proc.ExitCode)"
             exit 1
           }
-          Write-Host "HW2_v2.exe 啟動成功"
+          Write-Host "Laplacian_filter.exe 啟動成功"
           Stop-Process -Id $proc.Id -Force
 
       - uses: actions/upload-artifact@v4
         with:
-          name: HW2_v2-exe
-          path: dist/HW2_v2.exe
+          name: Laplacian_filter-exe
+          path: dist/Laplacian_filter.exe
 
       - name: 發佈到 Release「exe」
         shell: pwsh
@@ -47,4 +47,4 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           gh release delete exe --yes --cleanup-tag 2>$null
-          gh release create exe dist/HW2_v2.exe --title "HW2_v2 exe" --notes "由 GitHub Actions 自動打包（commit $($env:GITHUB_SHA.Substring(0,7))）" --target $env:GITHUB_SHA
+          gh release create exe dist/Laplacian_filter.exe --title "Laplacian_filter exe" --notes "由 GitHub Actions 自動打包（commit $($env:GITHUB_SHA.Substring(0,7))）" --target $env:GITHUB_SHA

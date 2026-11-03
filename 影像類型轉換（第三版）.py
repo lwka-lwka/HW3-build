@@ -1,6 +1,7 @@
-"""影像轉換系統（HW3：HW2 + 中值濾波 + DCT 轉換）
+"""影像轉換系統（HW3：HW2 + 中值濾波 + DCT 轉換；新增：拉普拉斯銳利化）
 使用者選擇一張彩色影像，轉換成灰階、純黑白、調色盤或 X 光影像，
 也可以做中值濾波（去除胡椒鹽雜訊）以及 DCT 轉換後把 DC / 中頻 / 高頻係數歸 0，
+以及用 Laplacian 濾波器找出邊緣、銳利化（講義 Ch03 p.45–52），
 轉換後可按「儲存成新檔」存檔。
 
 需要套件：Pillow、NumPy  (pip install pillow numpy)
@@ -182,6 +183,68 @@ class DCTConverter(ImageConverter):
         return Image.fromarray(self.__processor.process(gray, self.__mask), mode="L")
 
 
+# ---------- 新增：拉普拉斯濾波器（銳利濾波） ----------
+
+class LaplacianConverter(ImageConverter):
+    """Laplacian 銳利濾波（講義 p.46–52）。
+
+    ∇²f(x,y) = f(x+1,y) + f(x-1,y) + f(x,y+1) + f(x,y-1) − 4f(x,y)   公式 (4)
+
+    兩種遮罩（p.50）：
+      圖 C 垂直水平方向：[[0,1,0],[1,-4,1],[0,1,0]]
+      圖 D 對角方向    ：[[1,0,1],[0,-4,0],[1,0,1]]
+
+    兩種輸出（p.52 圖 E）：
+      edge   ：(b) 經過 Laplacian 遮罩處理後的結果（取絕對值顯示邊緣）
+      sharpen：(c) 把 (b) 跟原圖結合 → g = f − ∇²f
+               （遮罩中心為負，所以用「減」才會加強邊緣）
+    """
+
+    KERNELS = {
+        "hv":   np.array([[0, 1, 0],
+                          [1, -4, 1],
+                          [0, 1, 0]], dtype=np.float64),
+        "diag": np.array([[1, 0, 1],
+                          [0, -4, 0],
+                          [1, 0, 1]], dtype=np.float64),
+    }
+
+    def __init__(self, direction: str = "hv", output: str = "sharpen"):
+        if direction not in self.KERNELS:
+            raise ValueError(f"未知的遮罩方向：{direction}")
+        if output not in ("edge", "sharpen"):
+            raise ValueError(f"未知的輸出類型：{output}")
+        self.__kernel = self.KERNELS[direction]
+        self.__output = output
+
+    def convert(self, img: Image.Image) -> Image.Image:
+        # 講義用灰階影像示範，所以先轉灰階；用 float 計算才能保留負值
+        gray = np.array(img.convert("L"), dtype=np.float64)
+        lap = self.__convolve(gray)
+
+        if self.__output == "edge":
+            result = np.abs(lap)                 # (b) 邊緣：正負變化都顯示成亮線
+        else:
+            result = gray - lap                  # (c) 銳利化：原圖 − Laplacian
+
+        return Image.fromarray(np.clip(np.round(result), 0, 255).astype(np.uint8), mode="L")
+
+    def __convolve(self, gray: np.ndarray) -> np.ndarray:
+        """3×3 遮罩在每個像素上做「對應位置相乘再加總」。
+        影像外圍用邊緣像素補一圈，讓邊界像素也能套用遮罩。"""
+        h, w = gray.shape
+        k = self.__kernel.shape[0]
+        padded = np.pad(gray, k // 2, mode="edge")
+        out = np.zeros_like(gray)
+        # 遮罩的每一格 (dy, dx)：把整張影像對應的位移版本乘上權重後加總
+        for dy in range(k):
+            for dx in range(k):
+                weight = self.__kernel[dy, dx]
+                if weight != 0:
+                    out += weight * padded[dy:dy + h, dx:dx + w]
+        return out
+
+
 # ---------- 使用者介面 ----------
 
 class MainWindow:
@@ -250,6 +313,23 @@ class MainWindow:
                                        command=self.onUseResult)
         self.__chainButton.pack(side="right", padx=4)
 
+        # 第三列：新增的拉普拉斯濾波器
+        bar3 = tk.Frame(root, padx=10)
+        bar3.pack(fill="x", pady=(0, 10))
+
+        tk.Label(bar3, text="拉普拉斯：").pack(side="left")
+        self.__lapDirection = tk.StringVar(value="hv")
+        tk.Radiobutton(bar3, text="垂直水平遮罩", value="hv",
+                       variable=self.__lapDirection).pack(side="left")
+        tk.Radiobutton(bar3, text="對角遮罩", value="diag",
+                       variable=self.__lapDirection).pack(side="left", padx=(0, 10))
+        for text, mode in (("Laplacian 邊緣", "lap_edge"),
+                           ("Laplacian 銳利化", "lap_sharpen")):
+            btn = tk.Button(bar3, text=text, state="disabled",
+                            command=lambda m=mode: self.onConvert(m))
+            btn.pack(side="left", padx=4)
+            self.__convertButtons.append(btn)
+
         # 預覽區：左邊原圖、右邊轉換結果
         preview = tk.Frame(root, padx=10)
         preview.pack()
@@ -306,6 +386,10 @@ class MainWindow:
             self.__converter = MedianFilterConverter(size=int(self.__medianSize.get()))
         elif mode in ("dct_dc", "dct_mid", "dct_high"):
             self.__converter = DCTConverter(band=mode.split("_")[1])
+        elif mode in ("lap_edge", "lap_sharpen"):
+            self.__converter = LaplacianConverter(direction=self.__lapDirection.get(),
+                                                  output=mode.split("_")[1])
+            mode = f"{mode}_{self.__lapDirection.get()}"   # 存檔名稱帶上遮罩方向
         else:
             return
 
