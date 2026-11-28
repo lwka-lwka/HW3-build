@@ -1,4 +1,4 @@
-name: Build Brush_GIF exe（第四版：三種筆觸 + GIF 動畫）
+name: Build Image_Editor_Full exe（期末作業完整版）
 
 permissions:
   contents: write
@@ -21,24 +21,24 @@ jobs:
         run: python -m pip install numpy pillow pyinstaller
 
       - name: 打包 exe
-        run: pyinstaller --noconfirm --onefile --windowed --name Brush_GIF "影像類型轉換（第四版）.py"
+        run: pyinstaller --noconfirm --onefile --windowed --name Image_Editor_Full "影像類型轉換（完整版）.py"
 
       - name: 測試 exe 能否正常啟動
         shell: pwsh
         run: |
-          $proc = Start-Process -FilePath "dist\Brush_GIF.exe" -PassThru
+          $proc = Start-Process -FilePath "dist\Image_Editor_Full.exe" -PassThru
           Start-Sleep -Seconds 15
           if ($proc.HasExited) {
-            Write-Host "Brush_GIF.exe 啟動後馬上結束，結束代碼：$($proc.ExitCode)"
+            Write-Host "Image_Editor_Full.exe 啟動後馬上結束，結束代碼：$($proc.ExitCode)"
             exit 1
           }
-          Write-Host "Brush_GIF.exe 啟動成功"
+          Write-Host "Image_Editor_Full.exe 啟動成功"
           Stop-Process -Id $proc.Id -Force
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Brush_GIF-exe
-          path: dist/Brush_GIF.exe
+          name: Image_Editor_Full-exe
+          path: dist/Image_Editor_Full.exe
 
       - name: 發佈到 Release「exe」
         shell: pwsh
@@ -47,4 +47,4 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           gh release delete exe --yes --cleanup-tag 2>$null
-          gh release create exe dist/Brush_GIF.exe --title "Brush_GIF exe" --notes "由 GitHub Actions 自動打包（commit $($env:GITHUB_SHA.Substring(0,7))）" --target $env:GITHUB_SHA
+          gh release create exe dist/Image_Editor_Full.exe --title "Image_Editor_Full exe" --notes "由 GitHub Actions 自動打包（commit $($env:GITHUB_SHA.Substring(0,7))）" --target $env:GITHUB_SHA
